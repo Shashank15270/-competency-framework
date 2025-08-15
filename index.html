@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Competency Framework</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals with Teal Accent -->
+    <!-- Application Structure Plan: A dashboard-style SPA with a primary interactive module. Users select a role (e.g., Manager) via buttons, which dynamically updates a central radar chart to show the required proficiency profile for that role. Detailed behavioural indicators and development pathways for the selected role are displayed below the chart. This role-centric design was chosen because it directly supports key user tasks like performance reviews and career planning, making the dense framework immediately practical and easy to navigate, rather than forcing users to parse a large static table. -->
+    <!-- Visualization & Content Choices: The core of the report is the proficiency matrix. Goal: Compare competency expectations across roles. Viz Method: Interactive Radar Chart (Chart.js/Canvas). Interaction: User clicks a role button, the chart redraws to show that role's competency 'shape'. Justification: A radar chart is ideal for comparing multiple variables (competencies) for a single entity (role), providing an instant visual summary. It's more engaging and easier to interpret than a table row. Supporting text is dynamically updated via JS. Confirmed NO SVG/Mermaid used. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+            color: #333;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 50vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 500px;
+            }
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            background-color: #0d9488;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(13, 148, 136, 0.3);
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out;
+        }
+        .accordion-item.open .accordion-content {
+            max-height: 500px;
+        }
+        .accordion-item.open .accordion-arrow {
+            transform: rotate(180deg);
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-bold text-teal-800 mb-2">Competency Framework Explorer</h1>
+            <p class="text-lg text-gray-600">An interactive guide for the Management Accounts Department</p>
+        </header>
+
+        <main>
+            <section id="interactive-matrix" class="mb-12 bg-white rounded-2xl shadow-lg p-6 md:p-8">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Role Proficiency Matrix</h2>
+                    <p class="text-gray-600 max-w-3xl mx-auto">This tool visualizes the expected competency levels for each role. Select a role below to see its unique proficiency profile on the chart and explore detailed behavioral indicators and development pathways.</p>
+                </div>
+
+                <div id="role-selector" class="flex flex-wrap justify-center gap-2 md:gap-4 mb-8">
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="competencyChart"></canvas>
+                </div>
+
+                <div id="details-container" class="mt-8">
+                </div>
+            </section>
+
+            <section id="core-competencies" class="mb-12">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Core Competency Set</h2>
+                    <p class="text-gray-600 max-w-3xl mx-auto">These 12 competencies form the foundation of success at DM Financial. They are grouped into three key areas. Click on each category to expand and see the specific competencies within it.</p>
+                </div>
+                <div id="competency-accordion" class="space-y-4 max-w-4xl mx-auto">
+                </div>
+            </section>
+
+            <section id="development-pathways">
+                 <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Development Pathways</h2>
+                    <p class="text-gray-600 max-w-3xl mx-auto">We support growth through a variety of experiential learning methods designed to build skills effectively and integrate with daily workflows.</p>
+                </div>
+                <div id="pathways-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-12 py-6 border-t border-gray-200">
+            <p class="text-gray-500">&copy; 2025 DM Financial. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <script>
+        const frameworkData = {
+            proficiencyMap: { F: 1, W: 2, A: 3, S: 4 },
+            proficiencyLabels: { 1: 'Foundation', 2: 'Working', 3: 'Advanced', 4: 'Strategic' },
+            competencies: [
+                { id: 1, name: 'Communication & Stakeholder Management', category: 'Behavioural', description: 'Includes clear client/auditor updates and concise documentation.' },
+                { id: 2, name: 'Teamwork & Cross-timezone Collaboration', category: 'Behavioural', description: 'Focuses on handover discipline and responsiveness.' },
+                { id: 3, name: 'Attention to Detail & Quality', category: 'Behavioural', description: 'Ensuring high standards and accuracy in all work.' },
+                { id: 4, name: 'Planning & Time Management', category: 'Behavioural', description: 'Meeting deadlines and providing realistic effort estimates.' },
+                { id: 5, name: 'Adaptability & Learning Agility', category: 'Behavioural', description: 'Embracing change and learning new skills quickly.' },
+                { id: 6, name: 'Emotional Intelligence & Influence', category: 'Behavioural', description: 'Understanding and managing relationships, especially at senior levels.' },
+                { id: 7, name: 'Digital Productivity (Excel → Automation/BI)', category: 'Technical', description: 'Advanced Excel, basic scripts/Power Query/Power BI, and documenting automations.' },
+                { id: 8, name: 'Accounting Systems Proficiency', category: 'Technical', description: 'Proficiency in systems like Xero, Thesaurus, and client ERPs.' },
+                { id: 9, name: 'Financial Reporting & Technical Accounting', category: 'Technical', description: 'End-to-end statement creation and maintaining working papers.' },
+                { id: 10, name: 'Regulatory & IFRS Application', category: 'Technical', description: 'Correct interpretation and application of treatment decisions.' },
+                { id: 11, name: 'Governance, Risk & Compliance', category: 'Organisational/Strategic', description: 'Knowledge of Companies Act (IE/UK) and internal controls.' },
+                { id: 12, name: 'Client Relationship & Commercial Acumen', category: 'Organisational/Strategic', description: 'Includes needs analysis, managing scope, and delivering value.' },
+            ],
+            roles: [
+                { name: 'Associate', proficiencies: { 1: 'W', 2: 'W', 3: 'W', 4: 'W', 5: 'W', 6: 'F', 7: 'W', 8: 'W', 9: 'W', 10: 'F', 11: 'F', 12: 'F' } },
+                { name: 'Senior Associate', proficiencies: { 1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'W', 7: 'A', 8: 'A', 9: 'A', 10: 'W', 11: 'F/W', 12: 'W' } },
+                { name: 'Assistant Manager', proficiencies: { 1: 'A', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A', 11: 'W/A', 12: 'A' } },
+                { name: 'Manager', proficiencies: { 1: 'A/S', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A', 8: 'A', 9: 'A', 10: 'A', 11: 'A', 12: 'A/S' } },
+                { name: 'Senior Manager', proficiencies: { 1: 'S', 2: 'A/S', 3: 'A', 4: 'S', 5: 'S', 6: 'S', 7: 'A/S', 8: 'A/S', 9: 'S', 10: 'S', 11: 'S', 12: 'S' } },
+                { name: 'Director', proficiencies: { 1: 'S', 2: 'S', 3: 'S', 4: 'S', 5: 'S', 6: 'S', 7: 'S', 8: 'S', 9: 'S', 10: 'S', 11: 'S', 12: 'S' } }
+            ],
+            behavioralIndicators: {
+                'Communication': '<b>W:</b> Clear status emails and tidy workpapers. <br><b>A:</b> Anticipates stakeholder info needs; tailors messages. <br><b>S:</b> Shapes narratives for boards; coaches others on written standards.',
+                'Collaboration': '<b>W:</b> Follows handover checklist. <br><b>A:</b> Plans around time zone overlaps; flags risks early. <br><b>S:</b> Designs and optimises team protocols across regions.',
+                'EI & Influence': '<b>W:</b> Respectful tone, asks for clarification. <br><b>A:</b> Manages tension; gains agreement with facts. <br><b>S:</b> Reads the room at board level; resolves ambiguity.'
+            },
+            assessmentMethods: [
+                { name: 'Work Samples/QA', details: 'Error rates in working papers, number of re-work cycles, timeliness to close.' },
+                { name: 'Client Feedback', details: 'CSAT/NPS comments on clarity and responsiveness.' },
+                { name: 'Knowledge Checks', details: 'Short IFRS/regulatory scenarios; Excel/automation practicals.' },
+                { name: 'Peer/360 Inputs', details: 'Feedback on teamwork, mentoring, and cross-timezone reliability.' },
+                { name: 'Risk/Compliance', details: 'Exceptions, remedial actions, and documentation completeness.' },
+                { name: 'Digital Productivity', details: 'Number of documented automations; % cycle-time reduction on targeted tasks.' }
+            ],
+            developmentPathways: [
+                { name: 'On-the-Job', details: 'Rotation through close/review tasks, shadowing reviews, and weekly "review clinics".', icon: '💼' },
+                { name: 'Mentoring/Coaching', details: 'First-line leader program for SA/AM; reverse mentoring for digital tools.', icon: '🤝' },
+                { name: 'Micro-learning', details: 'Modular 20-30 min bites on topics like Advanced Excel, IFRS updates, and governance refreshers.', icon: '💡' },
+                { name: 'Communities of Practice', details: 'Automation Champions run show-and-tell sessions and maintain a shared repository.', icon: '🌐' },
+                { name: 'Transitional Competencies', details: 'Targeted "bridge" experiences like governance exposure for Managers or client steering-meetings for AMs.', icon: '🌉' }
+            ]
+        };
+
+        let currentRole = 'Associate';
+        let competencyChart;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateRoleSelector();
+            populateCompetencyAccordion();
+            populatePathwaysGrid();
+            initChart();
+            updateView();
+            setupAccordionListeners();
+        });
+
+        function populateRoleSelector() {
+            const selector = document.getElementById('role-selector');
+            frameworkData.roles.forEach(role => {
+                const button = document.createElement('button');
+                button.textContent = role.name;
+                button.dataset.role = role.name;
+                button.className = 'nav-button px-4 py-2 text-sm md:text-base font-semibold rounded-full bg-gray-100 text-gray-700 hover:bg-teal-500 hover:text-white';
+                button.onclick = () => {
+                    currentRole = role.name;
+                    updateView();
+                };
+                selector.appendChild(button);
+            });
+        }
+        
+        function getProficiencyValue(level) {
+            if (typeof level !== 'string') return 1;
+            const primaryLevel = level.split('/')[0];
+            return frameworkData.proficiencyMap[primaryLevel] || 1;
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('competencyChart').getContext('2d');
+            const labels = frameworkData.competencies.map(c => c.name.split(' '));
+
+            competencyChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Proficiency Level',
+                        data: [],
+                        backgroundColor: 'rgba(13, 148, 136, 0.2)',
+                        borderColor: 'rgba(13, 148, 136, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(13, 148, 136, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(13, 148, 136, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 10
+                                },
+                                color: '#444'
+                            },
+                            ticks: {
+                                beginAtZero: true,
+                                min: 0,
+                                max: 4,
+                                stepSize: 1,
+                                backdropColor: 'rgba(0,0,0,0)',
+                                callback: function(value) {
+                                    return ['','F', 'W', 'A', 'S'][value];
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw;
+                                    const label = frameworkData.proficiencyLabels[value] || 'N/A';
+                                    return `${context.dataset.label}: ${label}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateView() {
+            updateActiveButton();
+            updateChart();
+            updateDetails();
+        }
+
+        function updateActiveButton() {
+            document.querySelectorAll('#role-selector button').forEach(button => {
+                if (button.dataset.role === currentRole) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+
+        function updateChart() {
+            const roleData = frameworkData.roles.find(r => r.name === currentRole);
+            if (roleData) {
+                const proficiencyValues = frameworkData.competencies.map(c => getProficiencyValue(roleData.proficiencies[c.id]));
+                competencyChart.data.datasets[0].data = proficiencyValues;
+                competencyChart.data.datasets[0].label = `${currentRole} Proficiency`;
+                competencyChart.update();
+            }
+        }
+        
+        function updateDetails() {
+            const container = document.getElementById('details-container');
+            const roleData = frameworkData.roles.find(r => r.name === currentRole);
+            if (!roleData) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = `<div class="space-y-6">`;
+
+            html += `<div><h3 class="text-xl font-bold text-teal-700 mb-3 border-b-2 border-teal-200 pb-2">Behavioural Indicators for ${currentRole}</h3><div class="space-y-2 text-gray-700">`;
+            html += `<p><strong>Communication:</strong> ${frameworkData.behavioralIndicators.Communication}</p>`;
+            html += `<p><strong>Collaboration:</strong> ${frameworkData.behavioralIndicators.Collaboration}</p>`;
+            html += `<p><strong>EI & Influence:</strong> ${frameworkData.behavioralIndicators['EI & Influence']}</p></div></div>`;
+            
+            html += `<div><h3 class="text-xl font-bold text-teal-700 mb-3 border-b-2 border-teal-200 pb-2">Assessment Methods</h3><ul class="list-disc list-inside space-y-2 text-gray-700">`;
+            frameworkData.assessmentMethods.forEach(method => {
+                html += `<li><strong>${method.name}:</strong> ${method.details}</li>`;
+            });
+            html += `</ul></div></div>`;
+
+            container.innerHTML = html;
+        }
+
+        function populateCompetencyAccordion() {
+            const accordionContainer = document.getElementById('competency-accordion');
+            const categories = ['Behavioural', 'Technical', 'Organisational/Strategic'];
+            
+            categories.forEach(category => {
+                const items = frameworkData.competencies.filter(c => c.category === category);
+                let listItems = items.map(item => `<li class="ml-4"><strong class="font-semibold text-gray-800">${item.name}:</strong> ${item.description}</li>`).join('');
+
+                const accordionItem = `
+                    <div class="accordion-item bg-white rounded-lg shadow-sm border border-gray-200">
+                        <button class="accordion-header w-full flex justify-between items-center p-4 text-left">
+                            <span class="text-lg font-semibold text-teal-800">${category} Competencies</span>
+                            <span class="accordion-arrow text-teal-600 transform transition-transform duration-300">▼</span>
+                        </button>
+                        <div class="accordion-content px-4 pb-4">
+                            <ul class="list-disc space-y-2 text-gray-600">
+                                ${listItems}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                accordionContainer.innerHTML += accordionItem;
+            });
+        }
+        
+        function setupAccordionListeners() {
+            document.querySelectorAll('.accordion-header').forEach(button => {
+                button.addEventListener('click', () => {
+                    const accordionItem = button.parentElement;
+                    accordionItem.classList.toggle('open');
+                });
+            });
+        }
+
+        function populatePathwaysGrid() {
+            const grid = document.getElementById('pathways-grid');
+            frameworkData.developmentPathways.forEach(pathway => {
+                const card = `
+                    <div class="bg-white rounded-xl shadow-md p-6 flex flex-col items-center text-center transition hover:shadow-xl hover:transform hover:-translate-y-1">
+                        <div class="text-4xl mb-4">${pathway.icon}</div>
+                        <h4 class="text-lg font-bold text-gray-800 mb-2">${pathway.name}</h4>
+                        <p class="text-gray-600 text-sm">${pathway.details}</p>
+                    </div>
+                `;
+                grid.innerHTML += card;
+            });
+        }
+
+    </script>
+</body>
+</html>
